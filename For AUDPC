@@ -1,0 +1,535 @@
+
+
+library(dplyr)
+
+
+df <- read.csv("GHG Emission wheat rust disease scoring.csv")
+
+
+
+names(df)
+
+
+
+str(df)
+
+summary_table <- df %>%
+
+  group_by(Treatment.Name) %>%
+
+  summarise(
+
+    Mean_AUDPC = mean(AUDPC),
+
+    SD = sd(AUDPC),
+
+    SE = SD/sqrt(n())
+
+  )
+
+
+
+summary_table
+
+df$Rep <- as.factor(df$Rep)
+
+
+
+df$Treatment.Name <- as.factor(df$Treatment.Name)
+
+
+
+model <- aov(
+
+  AUDPC ~ Treatment.Name + Rep,
+
+  data = df
+
+)
+
+
+
+summary(model)
+
+
+
+library(agricolae)
+
+
+
+lsd_result <- LSD.test(
+
+  model,
+
+  "Treatment.Name",
+
+  p.adj = "none"
+
+)
+
+
+
+lsd_result$groups
+
+
+
+groups <- lsd_result$groups
+
+
+
+groups$Treatment.Name <- rownames(groups)
+
+
+
+summary_table <- merge(
+
+  summary_table,
+
+  groups,
+
+  by = "Treatment.Name"
+
+)
+
+
+
+summary_table
+
+
+
+summary_table$LabelY <-
+
+  summary_table$Mean_AUDPC +
+
+  summary_table$SE +
+
+  25
+
+library(ggplot2)
+
+
+
+my_plot <- ggplot(
+
+  summary_table,
+
+  aes(
+
+    x = reorder(Treatment.Name, Mean_AUDPC),
+
+    y = Mean_AUDPC,
+
+    fill = Treatment.Name
+
+  )
+
+) +
+
+  
+
+  geom_col(width = 0.75) +
+
+  
+
+  geom_errorbar(
+
+    aes(
+
+      ymin = Mean_AUDPC - SE,
+
+      ymax = Mean_AUDPC + SE
+
+    ),
+
+    width = 0.2
+
+  ) +
+
+  
+
+  geom_text(
+
+    aes(
+
+      y = LabelY,
+
+      label = groups
+
+    ),
+
+    size = 5,
+
+    fontface = "bold"
+
+  ) +
+
+  
+
+  scale_fill_brewer(
+
+    palette = "Set3"
+
+  ) +
+
+  
+
+  labs(
+
+    title = "Area Under Disease Progress Curve (AUDPC)",
+
+    x = "Nitrogen Management Treatments",
+
+    y = "AUDPC"
+
+  ) +
+
+  
+
+  theme_classic() +
+
+  
+
+  theme(
+
+    axis.text.x = element_text(
+
+      angle = 45,
+
+      hjust = 1
+
+    ),
+
+    legend.position = "none"
+
+  )
+
+
+
+print(my_plot)
+
+
+
+library(officer)
+
+library(rvg)
+
+
+
+ppt <- read_pptx()
+
+
+
+ppt <- add_slide(
+
+  ppt,
+
+  layout = "Title and Content",
+
+  master = "Office Theme"
+
+)
+
+
+
+ppt <- ph_with(
+
+  ppt,
+
+  dml(ggobj = my_plot),
+
+  location = ph_location_fullsize()
+
+)
+
+
+
+print(
+
+  ppt,
+
+  target = "AUDPC_LSD_Editable_Graph.pptx"
+
+)
+
+
+
+
+
+
+
+
+
+with the P-value
+
+library(dplyr)
+
+library(ggplot2)
+
+library(agricolae)
+
+library(officer)
+
+library(rvg)
+
+df <- read.csv("GHG Emission wheat rust disease scoring.csv")
+
+
+
+str(df)
+
+
+
+names(df)
+
+df$Rep <- as.factor(df$Rep)
+
+
+
+df$Treatment.Name <- as.factor(df$Treatment.Name)
+
+summary_table <- df %>%
+
+  group_by(Treatment.Name) %>%
+
+  summarise(
+
+    Mean_AUDPC = mean(AUDPC),
+
+    SD = sd(AUDPC),
+
+    SE = SD/sqrt(n())
+
+  )
+
+
+
+summary_table
+
+model <- aov(
+
+  AUDPC ~ Treatment.Name + Rep,
+
+  data = df
+
+)
+
+
+
+summary(model)
+
+anova_table <- summary(model)
+
+
+
+p_value <- anova_table[[1]]$`Pr(>F)`[1]
+
+
+
+p_value
+
+p_text <- ifelse(
+
+  p_value < 0.001,
+
+  "P < 0.001",
+
+  paste0("P = ", round(p_value, 4))
+
+)
+
+
+
+p_text
+
+lsd_result <- LSD.test(
+
+  model,
+
+  "Treatment.Name",
+
+  p.adj = "none"
+
+)
+
+
+
+lsd_result$groups
+
+groups <- lsd_result$groups
+
+
+
+groups$Treatment.Name <- rownames(groups)
+
+
+
+summary_table <- merge(
+
+  summary_table,
+
+  groups,
+
+  by = "Treatment.Name"
+
+)
+
+
+
+summary_table
+
+summary_table$LabelY <-
+
+  summary_table$Mean_AUDPC +
+
+  summary_table$SE +
+
+  25
+
+my_plot <- ggplot(
+
+  summary_table,
+
+  aes(
+
+    x = reorder(Treatment.Name, Mean_AUDPC),
+
+    y = Mean_AUDPC,
+
+    fill = Treatment.Name
+
+  )
+
+) +
+
+  
+
+  geom_col(width = 0.75) +
+
+  
+
+  geom_errorbar(
+
+    aes(
+
+      ymin = Mean_AUDPC - SE,
+
+      ymax = Mean_AUDPC + SE
+
+    ),
+
+    width = 0.2
+
+  ) +
+
+  
+
+  geom_text(
+
+    aes(
+
+      y = LabelY,
+
+      label = groups
+
+    ),
+
+    size = 5,
+
+    fontface = "bold"
+
+  ) +
+
+  
+
+  scale_fill_brewer(
+
+    palette = "Set3"
+
+  ) +
+
+  
+
+  labs(
+
+    title = paste(
+
+      "Area Under Disease Progress Curve (AUDPC)",
+
+      "\n",
+
+      p_text
+
+    ),
+
+    x = "Nitrogen Management Treatments",
+
+    y = "AUDPC"
+
+  ) +
+
+  
+
+  theme_classic() +
+
+  
+
+  theme(
+
+    axis.text.x = element_text(
+
+      angle = 45,
+
+      hjust = 1
+
+    ),
+
+    legend.position = "none"
+
+  )
+
+
+
+print(my_plot)
+
+ppt <- read_pptx()
+
+
+
+ppt <- add_slide(
+
+  ppt,
+
+  layout = "Title and Content",
+
+  master = "Office Theme"
+
+)
+
+
+
+ppt <- ph_with(
+
+  ppt,
+
+  dml(ggobj = my_plot),
+
+  location = ph_location_fullsize()
+
+)
+
+
+
+print(
+
+  ppt,
+
+  target = "AUDPC_LSD_Editable_Graph_Pvalue.pptx"
+
+)
+
+
+
+
+
+summary(model)
+
