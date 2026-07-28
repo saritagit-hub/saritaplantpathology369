@@ -1,0 +1,499 @@
+# ==========================================================
+# SPEARMAN'S RANK CORRELATION BETWEEN DSI AND AUDPC
+# ========================================
+
+==================
+
+# Install packages if necessary
+# install.packages(c("readxl","dplyr","psych","openxlsx"))
+
+library(readxl)
+library(dplyr)
+library(psych)
+library(openxlsx)
+
+# ==========================================================
+# FILE PATH
+# ==========================================================
+
+  file_path <- "Phytophthora_Trial_1_Bacillus.xlsx"
+
+# ==========================================================
+# IMPORT DISEASE SCORING SHEET
+# ==========================================================
+
+disease_data <- read_excel(
+  path = file_path,
+  sheet = "Disease Scoring",
+  skip = 1,
+  col_names = c(
+    "Sample_No",
+    "Replication",
+    "Day_1",
+    "Day_4",
+    "Day_7",
+    "Day_10",
+    "Day_13"
+  )
+)
+
+# Check imported data
+head(disease_data)
+
+# ==========================================================
+# CALCULATE DSI (%)
+# Disease rating scale = 0-5
+# ==========================================================
+str(disease_data)
+sapply(disease_data, class)
+colnames(disease_data)
+
+head(disease_data, 10)
+
+disease_data <- disease_data %>%
+  mutate(
+    Day_1  = as.numeric(Day_1),
+    Day_4  = as.numeric(Day_4),
+    Day_7  = as.numeric(Day_7),
+    Day_10 = as.numeric(Day_10),
+    Day_13 = as.numeric(Day_13)
+  )
+
+
+
+
+
+
+
+
+max_rating <- 5
+
+data_inoc <- disease_data %>%
+  mutate(
+    DSI = (Day_13 / max_rating) * 100
+  )
+
+# ==========================================================
+# CALCULATE AUDPC
+# ==========================================================
+
+time_points <- c(1, 4, 7, 10, 13)
+
+data_inoc$AUDPC <- apply(
+  data_inoc[, c("Day_1","Day_4","Day_7","Day_10","Day_13")],
+  1,
+  function(x){
+    
+    sum(
+      diff(time_points) *
+        (head(x,-1) + tail(x,-1)) / 2
+    )
+    
+  }
+)
+
+# ==========================================================
+# DATA FOR CORRELATION
+# ==========================================================
+
+corr_data <- data_inoc %>%
+  select(
+    AUDPC,
+    DSI
+  )
+
+# ==========================================================
+# SPEARMAN'S RANK CORRELATION
+# ==========================================================
+
+cor_test <- corr.test(
+  corr_data,
+  method = "spearman",
+  adjust = "none"
+)
+
+cor_matrix <- cor_test$r
+p_matrix   <- cor_test$p
+
+# ==========================================================
+# EXPORT RESULTS
+# ==========================================================
+
+cor_export <- data.frame(
+  Variable = rownames(cor_matrix),
+  round(cor_matrix,3),
+  check.names = FALSE
+)
+
+p_export <- data.frame(
+  Variable = rownames(p_matrix),
+  round(p_matrix,4),
+  check.names = FALSE
+)
+
+output_excel <- file.path(
+  dirname(file_path),
+  "Spearman_Correlation_DSI_AUDPC.xlsx"
+)
+
+write.xlsx(
+  list(
+    Correlation_Coefficients = cor_export,
+    P_Values = p_export
+  ),
+  file = output_excel,
+  overwrite = TRUE
+)
+
+# ==========================================================
+# PRINT RESULTS
+# ==========================================================
+
+cat("\n")
+cat("=========================================\n")
+cat(" Spearman Correlation Completed\n")
+cat("=========================================\n\n")
+
+print(cor_matrix)
+
+cat("\nP-values\n")
+print(p_matrix)
+
+cat("\nResults exported to:\n")
+print(output_excel)
+# ==========================================================
+# FINAL CORRELATION TABLE
+# ==========================================================
+
+final_results <- data.frame(
+  Variable_1 = "AUDPC",
+  Variable_2 = "DSI",
+  Spearman_r = round(cor_test$r[1,2], 3),
+  P_value = round(cor_test$p[1,2], 4)
+)
+
+final_results
+write.xlsx(
+  list(
+    Final_Result = final_results,
+    Correlation_Matrix = cor_export,
+    P_Values = p_export
+  ),
+  file = output_excel,
+  overwrite = TRUE
+)
+install.packages("ggplot2")
+library(ggplot2)
+# ==========================================================
+# SPEARMAN CORRELATION PLOT
+# ==========================================================
+
+p <- ggplot(data_inoc,
+            aes(x = AUDPC,
+                y = DSI)) +
+  
+  geom_point(
+    size = 3,
+    colour = "blue"
+  ) +
+  
+  geom_smooth(
+    method = "lm",
+    se = TRUE,
+    colour = "red"
+  ) +
+  
+  labs(
+    title = "Relationship between DSI and AUDPC",
+    x = "AUDPC",
+    y = "Disease Severity Index (%)"
+  ) +
+  
+  theme_bw(base_size = 14)
+
+print(p)
+ggsave(
+  filename = "Spearman_DSI_AUDPC.tiff",
+  plot = p,
+  width = 6,
+  height = 5,
+  dpi = 600,
+  compression = "lzw"
+)
+ggsave(
+  filename = "Spearman_DSI_AUDPC.png",
+  plot = p,
+  width = 6,
+  height = 5,
+  dpi = 600
+)
+
+install.packages("ggpubr")
+
+# ==========================================================
+# PUBLICATION-QUALITY SPEARMAN CORRELATION FIGURE
+# ==========================================================
+
+library(ggplot2)
+library(ggpubr)
+
+rho <- round(cor_test$r[1,2],3)
+pval <- signif(cor_test$p[1,2],3)
+
+p <- ggplot(
+  data_inoc,
+  aes(x = AUDPC,
+      y = DSI)
+) +
+  
+  geom_point(
+    shape = 21,
+    size = 3.5,
+    stroke = 0.7,
+    colour = "black",
+    fill = "#2C7FB8"
+  ) +
+  
+  geom_smooth(
+    method = "lm",
+    se = TRUE,
+    linewidth = 0.9,
+    colour = "#D7301F"
+  ) +
+  
+  annotate(
+    "text",
+    x = Inf,
+    y = Inf,
+    hjust = 1.1,
+    vjust = 1.8,
+    size = 5,
+    fontface = "bold",
+    label = paste0(
+      "Spearman's \u03C1 = ", rho,
+      "\nP = ", pval
+    )
+  ) +
+  
+  labs(
+    title = "Relationship between Disease Severity Index and AUDPC",
+    x = "Area Under Disease Progress Curve (AUDPC)",
+    y = "Disease Severity Index (%)"
+  ) +
+  
+  theme_bw(base_size = 15) +
+  
+  theme(
+    plot.title = element_text(
+      face = "bold",
+      hjust = 0.5
+    ),
+    
+    axis.title = element_text(
+      face = "bold"
+    ),
+    
+    panel.grid = element_blank(),
+    
+    legend.position = "none",
+    
+    plot.margin = margin(10,10,10,10)
+  )
+
+print(p)
+ggsave(
+  filename = "Figure_Spearman_DSI_AUDPC.tiff",
+  plot = p,
+  dpi = 600,
+  width = 6,
+  height = 5,
+  units = "in",
+  compression = "lzw"
+)ggsave(
+  filename = "Figure_Spearman_DSI_AUDPC.png",
+  plot = p,
+  dpi = 600,
+  width = 6,
+  height = 5,
+  units = "in"
+)
+ggsave(
+  filename = "Figure_Spearman_DSI_AUDPC.pdf",
+  plot = p,
+  width = 6,
+  height = 5,
+  units = "in"
+)
+final_results <- data.frame(
+  Variable_1 = "AUDPC",
+  Variable_2 = "DSI",
+  Spearman_rho = round(cor_test$r[1,2],3),
+  P_value = signif(cor_test$p[1,2],3)
+)
+
+print(final_results)
+
+write.xlsx(
+  list(
+    Final_Result = final_results,
+    Correlation_Matrix = cor_export,
+    P_Values = p_export
+  ),
+  file = "Spearman_Correlation_DSI_AUDPC.xlsx",
+  overwrite = TRUE
+)
+library(ggplot2)
+
+# Calculate regression model (for displaying equation only)
+lm_model <- lm(DSI ~ AUDPC, data = data_inoc)
+
+eq <- paste0(
+  "y = ",
+  round(coef(lm_model)[2],3),
+  "x + ",
+  round(coef(lm_model)[1],3)
+)
+
+r2 <- summary(lm_model)$r.squared
+
+rho <- round(cor_test$r[1,2],3)
+p_cor <- signif(cor_test$p[1,2],3)
+
+p_lm <- signif(summary(lm_model)$coefficients[2,4],3)
+
+p <- ggplot(data_inoc,
+            aes(x = AUDPC,
+                y = DSI)) +
+  
+  geom_point(
+    shape = 21,
+    size = 3.5,
+    stroke = 0.8,
+    colour = "black",
+    fill = "#2C7FB8"
+  ) +
+  
+  geom_smooth(
+    method = "lm",
+    se = TRUE,
+    linewidth = 1,
+    colour = "#D7301F"
+  ) +
+  
+  annotate(
+    "text",
+    x = Inf,
+    y = Inf,
+    hjust = 1.05,
+    vjust = 1.1,
+    size = 5,
+    fontface = "bold",
+    label = paste0(
+      "Spearman's \u03C1 = ", rho,
+      "\nP = ", p_cor,
+      "\n",
+      eq,
+      "\nR² = ", round(r2,3),
+      "\nRegression P = ", p_lm
+    )
+  ) +
+  
+  labs(
+    title = "Relationship between Disease Severity Index and AUDPC",
+    x = "Area Under Disease Progress Curve (AUDPC)",
+    y = "Disease Severity Index (%)"
+  ) +
+  
+  theme_classic(base_size = 15) +
+  
+  theme(
+    plot.title = element_text(
+      hjust = 0.5,
+      face = "bold",
+      size = 16
+    ),
+    
+    axis.title = element_text(
+      face = "bold",
+      size = 14
+    ),
+    
+    axis.text = element_text(
+      colour = "black",
+      size = 12
+    ),
+    
+    legend.position = "none",
+    
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    plot.margin = margin(10,10,10,10)
+  )
+
+print(p)
+ggsave(
+  "Figure_Spearman_DSI_AUDPC.tiff",
+  plot = p,
+  width = 6,
+  height = 5,
+  dpi = 600,
+  compression = "lzw"
+)
+
+ggsave(
+  "Figure_Spearman_DSI_AUDPC.png",
+  plot = p,
+  width = 6,
+  height = 5,
+  dpi = 600
+)
+
+ggsave(
+  "Figure_Spearman_DSI_AUDPC.pdf",
+  plot = p,
+  width = 6,
+  height = 5
+)
+
+theme_classic(base_size = 15) +
+  
+  theme(
+    plot.title = element_text(
+      hjust = 0.5,          # Center the title
+      face = "bold",
+      size = 16
+    ),
+    
+    axis.title = element_text(
+      face = "bold",
+      size = 14
+    ),
+    
+    axis.text = element_text(
+      colour = "black",
+      size = 12
+    ),
+    
+    panel.grid.major = element_blank(),   # Remove major grid
+    panel.grid.minor = element_blank(),   # Remove minor grid
+    
+    legend.position = "none",
+    
+    plot.margin = margin(10,10,10,10)
+  )
+theme_bw(base_size = 15) +
+  
+  theme(
+    plot.title = element_text(
+      hjust = 0.5,
+      face = "bold",
+      size = 16
+    ),
+    
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    legend.position = "none"
+  )
+
