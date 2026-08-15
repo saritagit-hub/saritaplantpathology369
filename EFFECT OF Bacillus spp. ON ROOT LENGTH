@@ -1,0 +1,564 @@
+############################################################
+# SHEET 2 - EFFECT OF Bacillus spp. ON ROOT LENGTH
+############################################################
+
+##############################
+# Load libraries
+##############################
+
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(agricolae)
+
+############################################################
+# IMPORT ROOT LENGTH DATA
+#
+# Root Length is in SHEET 2
+############################################################
+
+data <- read_excel(
+  "Pthytophthora/Phytophthora_Trial_1_Bacillus.xlsx",
+  sheet = 2
+)
+
+############################################################
+# CHECK IMPORTED DATA
+############################################################
+
+cat("\nColumn names in Sheet 2:\n")
+
+print(
+  names(data)
+)
+
+cat("\nFirst few rows:\n")
+
+print(
+  head(data)
+)
+
+############################################################
+# PREPARE DATA
+############################################################
+
+data$Treatment <- as.factor(
+  data$Treatment
+)
+
+data$Replication <- as.factor(
+  data$Replication
+)
+
+############################################################
+# CHECK THAT ROOT LENGTH COLUMN EXISTS
+############################################################
+
+if(!"Root Length (cm)" %in% names(data)){
+  
+  stop(
+    paste(
+      "\nERROR: 'Root Length (cm)' was not found.",
+      "\nPlease check the column names printed above."
+    )
+  )
+  
+}
+
+############################################################
+# CONVERT ROOT LENGTH TO NUMERIC
+############################################################
+
+data$`Root Length (cm)` <- as.numeric(
+  data$`Root Length (cm)`
+)
+
+############################################################
+# ANOVA (RCBD)
+############################################################
+
+model <- aov(
+  
+  `Root Length (cm)` ~
+    Replication +
+    Treatment,
+  
+  data = data
+  
+)
+
+############################################################
+# ANOVA RESULTS
+############################################################
+
+cat("\n==============================\n")
+cat("ANOVA - ROOT LENGTH\n")
+cat("==============================\n\n")
+
+print(
+  summary(model)
+)
+
+############################################################
+# EXTRACT TREATMENT P-VALUE
+############################################################
+
+anova_table <- summary(model)
+
+p_value <- anova_table[[1]][
+  "Treatment",
+  "Pr(>F)"
+]
+
+p_text <- paste0(
+  "P = ",
+  format.pval(
+    p_value,
+    digits = 3,
+    eps = 0.001
+  )
+)
+
+############################################################
+# LSD TEST
+############################################################
+
+LSD <- LSD.test(
+  
+  model,
+  
+  "Treatment",
+  
+  p.adj = "none",
+  
+  console = TRUE
+  
+)
+
+############################################################
+# EXTRACT LSD GROUPING LETTERS
+############################################################
+
+groups <- LSD$groups
+
+groups$Treatment <- rownames(
+  groups
+)
+
+rownames(groups) <- NULL
+
+############################################################
+# SHORTEN LONG LSD GROUP LABELS
+############################################################
+
+shorten_groups <- function(x){
+  
+  sapply(
+    
+    x,
+    
+    function(g){
+      
+      chars <- strsplit(
+        as.character(g),
+        ""
+      )[[1]]
+      
+      if(length(chars) <= 3){
+        
+        return(g)
+        
+      } else {
+        
+        return(
+          paste0(
+            chars[1],
+            "-",
+            chars[length(chars)]
+          )
+        )
+        
+      }
+      
+    }
+    
+  )
+  
+}
+
+groups$groups <- shorten_groups(
+  groups$groups
+)
+
+############################################################
+# SUMMARY TABLE
+############################################################
+
+summary_data <- data %>%
+  
+  group_by(Treatment) %>%
+  
+  summarise(
+    
+    Mean = mean(
+      `Root Length (cm)`,
+      na.rm = TRUE
+    ),
+    
+    SD = sd(
+      `Root Length (cm)`,
+      na.rm = TRUE
+    ),
+    
+    SE = SD / sqrt(n()),
+    
+    .groups = "drop"
+    
+  )
+
+############################################################
+# MATCH LSD GROUPS WITH CORRECT TREATMENT
+############################################################
+
+summary_data$Treatment <- as.character(
+  summary_data$Treatment
+)
+
+groups$Treatment <- as.character(
+  groups$Treatment
+)
+
+summary_data$groups <- groups$groups[
+  
+  match(
+    summary_data$Treatment,
+    groups$Treatment
+  )
+  
+]
+
+############################################################
+# CHECK SUMMARY DATA
+############################################################
+
+cat("\n==============================\n")
+cat("SUMMARY BEFORE ORDERING\n")
+cat("==============================\n\n")
+
+print(
+  summary_data %>%
+    select(
+      Treatment,
+      Mean,
+      SD,
+      SE,
+      groups
+    )
+)
+
+############################################################
+# ARRANGE BACILLUS ISOLATES ALPHABETICALLY
+#
+# Bacillus isolates = alphabetical order
+# Inoculated Control = after isolates
+# Non-inoculated Control = last
+#
+# Mean, SE and LSD letters remain matched.
+############################################################
+
+summary_data <- summary_data %>%
+  
+  mutate(
+    
+    Order = case_when(
+      
+      Treatment == "Inoculated Control" ~ 2,
+      
+      Treatment == "Non-inoculated Control" ~ 3,
+      
+      TRUE ~ 1
+      
+    )
+    
+  ) %>%
+  
+  arrange(
+    
+    Order,
+    
+    Treatment
+    
+  ) %>%
+  
+  select(
+    -Order
+  )
+
+############################################################
+# SET FACTOR LEVELS ACCORDING TO FINAL ORDER
+############################################################
+
+summary_data$Treatment <- factor(
+  
+  summary_data$Treatment,
+  
+  levels = summary_data$Treatment
+  
+)
+
+############################################################
+# CHECK FINAL ALPHABETICAL ORDER
+############################################################
+
+cat("\n==============================\n")
+cat("FINAL ALPHABETICAL ORDER\n")
+cat("==============================\n\n")
+
+print(
+  summary_data %>%
+    select(
+      Treatment,
+      Mean,
+      SE,
+      groups
+    )
+)
+
+############################################################
+# DETERMINE Y-AXIS LIMIT
+############################################################
+
+y_limit <- max(
+  
+  summary_data$Mean +
+    summary_data$SE
+  
+) + 5
+
+############################################################
+# ROOT LENGTH FIGURE
+############################################################
+
+Root_Length_Figure <- ggplot(
+  
+  summary_data,
+  
+  aes(
+    x = Treatment,
+    y = Mean
+  )
+  
+) +
+  
+  ##########################################################
+# BARS
+##########################################################
+
+geom_col(
+  
+  fill = "steelblue4",
+  
+  colour = "black",
+  
+  width = 0.75
+  
+) +
+  
+  ##########################################################
+# ERROR BARS - SE
+##########################################################
+
+geom_errorbar(
+  
+  aes(
+    
+    ymin = Mean - SE,
+    
+    ymax = Mean + SE
+    
+  ),
+  
+  width = 0.20,
+  
+  linewidth = 0.8
+  
+) +
+  
+  ##########################################################
+# LSD GROUPING LETTERS
+##########################################################
+
+geom_text(
+  
+  aes(
+    
+    y = Mean + SE + 2,
+    
+    label = groups
+    
+  ),
+  
+  size = 4,
+  
+  fontface = "bold"
+  
+) +
+  
+  ##########################################################
+# P-VALUE
+##########################################################
+
+annotate(
+  
+  "text",
+  
+  x = Inf,
+  
+  y = y_limit,
+  
+  label = p_text,
+  
+  hjust = 1.1,
+  
+  vjust = 1,
+  
+  size = 5,
+  
+  fontface = "bold"
+  
+) +
+  
+  ##########################################################
+# Y-AXIS
+##########################################################
+
+coord_cartesian(
+  
+  ylim = c(
+    0,
+    y_limit
+  )
+  
+) +
+  
+  ##########################################################
+# LABELS
+##########################################################
+
+labs(
+  
+  title = expression(
+    
+    "Effect of " *
+      italic("Bacillus") *
+      " spp. on Root Length"
+    
+  ),
+  
+  x = "Isolates",
+  
+  y = "Root Length (cm)"
+  
+) +
+  
+  ##########################################################
+# THEME
+##########################################################
+
+theme_classic(
+  
+  base_size = 14
+  
+) +
+  
+  theme(
+    
+    plot.title = element_text(
+      
+      hjust = 0.5,
+      
+      face = "bold",
+      
+      size = 16
+      
+    ),
+    
+    axis.title = element_text(
+      
+      face = "bold",
+      
+      size = 14
+      
+    ),
+    
+    axis.text.x = element_text(
+      
+      angle = 90,
+      
+      hjust = 1,
+      
+      vjust = 0.5,
+      
+      size = 9,
+      
+      colour = "black"
+      
+    ),
+    
+    axis.text.y = element_text(
+      
+      size = 11,
+      
+      colour = "black"
+      
+    ),
+    
+    axis.line = element_line(
+      
+      linewidth = 0.8
+      
+    ),
+    
+    axis.ticks = element_line(
+      
+      linewidth = 0.8
+      
+    ),
+    
+    legend.position = "none"
+    
+  )
+
+############################################################
+# DISPLAY FIGURE
+############################################################
+
+print(
+  Root_Length_Figure
+)
+
+############################################################
+# SAVE FIGURE
+############################################################
+
+ggsave(
+  
+  filename = "Root_Length_Figure_Alphabetical.png",
+  
+  plot = Root_Length_Figure,
+  
+  width = 1200,
+  
+  height = 600,
+  
+  units = "px",
+  
+  dpi = 600,
+  
+  bg = "white"
+  
+)
+
+############################################################
+# END
+############################################################
