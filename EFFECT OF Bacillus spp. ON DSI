@@ -1,0 +1,554 @@
+############################################################
+# EFFECT OF Bacillus spp. ON DSI
+############################################################
+
+##############################
+# Load packages
+##############################
+
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(agricolae)
+
+############################################################
+# Import Disease Scoring data
+############################################################
+
+DSI_data <- read_excel(
+  "Pthytophthora/Phytophthora_Trial_2_Bacillus.xlsx"
+)
+
+############################################################
+# Rename columns
+############################################################
+
+colnames(DSI_data) <- c(
+  "Treatment",
+  "Replication",
+  "Day1",
+  "Day4",
+  "Day7",
+  "Day10",
+  "Day13"
+)
+
+############################################################
+# Convert variables
+############################################################
+
+DSI_data$Treatment <- as.factor(
+  DSI_data$Treatment
+)
+
+DSI_data$Replication <- as.factor(
+  DSI_data$Replication
+)
+
+DSI_data$Day1 <- as.numeric(
+  DSI_data$Day1
+)
+
+DSI_data$Day4 <- as.numeric(
+  DSI_data$Day4
+)
+
+DSI_data$Day7 <- as.numeric(
+  DSI_data$Day7
+)
+
+DSI_data$Day10 <- as.numeric(
+  DSI_data$Day10
+)
+
+DSI_data$Day13 <- as.numeric(
+  DSI_data$Day13
+)
+
+############################################################
+# Calculate DSI at each observation day
+############################################################
+
+# Disease scale maximum score
+# Your disease scale is 0-5
+
+max_score <- 5
+
+DSI_summary <- DSI_data %>%
+  group_by(Treatment) %>%
+  summarise(
+    
+    Day1_DSI =
+      mean(Day1, na.rm = TRUE) /
+      max_score * 100,
+    
+    Day4_DSI =
+      mean(Day4, na.rm = TRUE) /
+      max_score * 100,
+    
+    Day7_DSI =
+      mean(Day7, na.rm = TRUE) /
+      max_score * 100,
+    
+    Day10_DSI =
+      mean(Day10, na.rm = TRUE) /
+      max_score * 100,
+    
+    Day13_DSI =
+      mean(Day13, na.rm = TRUE) /
+      max_score * 100,
+    
+    .groups = "drop"
+    
+  )
+
+print(DSI_summary)
+
+############################################################
+# Final DSI (Day 13)
+# Used for treatment comparison
+############################################################
+
+DSI_data$DSI_Day13 <-
+  (DSI_data$Day13 / max_score) * 100
+
+############################################################
+# ANOVA (RCBD)
+############################################################
+
+DSI_model <- aov(
+  DSI_Day13 ~ Replication + Treatment,
+  data = DSI_data
+)
+
+summary(DSI_model)
+
+############################################################
+# Extract Treatment P-value
+############################################################
+
+anova_result <- summary(
+  DSI_model
+)
+
+p_value <- anova_result[[1]][
+  "Treatment",
+  "Pr(>F)"
+]
+
+p_text <- paste0(
+  "P = ",
+  format.pval(
+    p_value,
+    digits = 3,
+    eps = 0.001
+  )
+)
+
+############################################################
+# LSD Test
+############################################################
+
+DSI_LSD <- LSD.test(
+  DSI_model,
+  "Treatment",
+  p.adj = "none",
+  console = TRUE
+)
+
+############################################################
+# Extract LSD grouping letters
+############################################################
+
+groups <- DSI_LSD$groups
+
+groups$Treatment <- rownames(
+  groups
+)
+
+rownames(groups) <- NULL
+
+############################################################
+# Shorten long LSD group labels
+############################################################
+
+shorten_groups <- function(x){
+  
+  sapply(
+    x,
+    function(g){
+      
+      chars <- strsplit(
+        as.character(g),
+        ""
+      )[[1]]
+      
+      if(length(chars) <= 3){
+        
+        return(g)
+        
+      } else {
+        
+        return(
+          paste0(
+            chars[1],
+            "-",
+            chars[length(chars)]
+          )
+        )
+        
+      }
+      
+    }
+  )
+  
+}
+
+groups$groups <- shorten_groups(
+  groups$groups
+)
+
+############################################################
+# Treatment mean DSI table
+############################################################
+
+summary_DSI <- DSI_data %>%
+  group_by(Treatment) %>%
+  summarise(
+    
+    Mean = mean(
+      DSI_Day13,
+      na.rm = TRUE
+    ),
+    
+    SD = sd(
+      DSI_Day13,
+      na.rm = TRUE
+    ),
+    
+    SE = SD / sqrt(n()),
+    
+    .groups = "drop"
+    
+  )
+
+############################################################
+# Add LSD groups
+# Keep each letter matched with its treatment
+############################################################
+
+summary_DSI$Treatment <- as.character(
+  summary_DSI$Treatment
+)
+
+groups$Treatment <- as.character(
+  groups$Treatment
+)
+
+summary_DSI$groups <- groups$groups[
+  match(
+    summary_DSI$Treatment,
+    groups$Treatment
+  )
+]
+
+graph_data <- summary_DSI
+
+############################################################
+# Check final dataset before ordering
+############################################################
+
+print(graph_data)
+
+############################################################
+# ARRANGE BACILLUS ISOLATES ALPHABETICALLY
+#
+# Bacillus isolates = alphabetical order
+# Inoculated Control = second section
+# Non-inoculated Control = last
+#
+# Mean, SE, and LSD letters remain correctly matched
+############################################################
+
+graph_data$Treatment <- as.character(
+  graph_data$Treatment
+)
+
+graph_data <- graph_data %>%
+  
+  mutate(
+    
+    Order = case_when(
+      
+      Treatment == "Inoculated Control" ~ 2,
+      
+      Treatment == "Non-inoculated Control" ~ 3,
+      
+      TRUE ~ 1
+      
+    )
+    
+  ) %>%
+  
+  arrange(
+    Order,
+    Treatment
+  ) %>%
+  
+  select(
+    -Order
+  )
+
+############################################################
+# Set factor levels according to final order
+############################################################
+
+graph_data$Treatment <- factor(
+  graph_data$Treatment,
+  levels = graph_data$Treatment
+)
+
+############################################################
+# Check final alphabetical order
+# and corresponding statistical values
+############################################################
+
+print(
+  graph_data %>%
+    select(
+      Treatment,
+      Mean,
+      SE,
+      groups
+    )
+)
+
+############################################################
+# Y-axis limit
+############################################################
+
+y_limit <- max(
+  graph_data$Mean + graph_data$SE
+) + 15
+
+############################################################
+# Create DSI graph
+############################################################
+
+DSI_plot <- ggplot(
+  
+  graph_data,
+  
+  aes(
+    x = Treatment,
+    y = Mean
+  )
+  
+) +
+  
+  ##########################################################
+# DSI bars
+##########################################################
+
+geom_col(
+  
+  fill = "steelblue4",
+  
+  colour = "black",
+  
+  width = 0.75
+  
+) +
+  
+  ##########################################################
+# Error bars (SE)
+##########################################################
+
+geom_errorbar(
+  
+  aes(
+    ymin = Mean - SE,
+    ymax = Mean + SE
+  ),
+  
+  width = 0.20,
+  
+  linewidth = 0.7
+  
+) +
+  
+  ##########################################################
+# LSD group letters
+##########################################################
+
+geom_text(
+  
+  aes(
+    y = Mean + SE + 5,
+    label = groups
+  ),
+  
+  size = 4,
+  
+  fontface = "bold"
+  
+) +
+  
+  ##########################################################
+# P-value
+##########################################################
+
+annotate(
+  
+  "text",
+  
+  x = Inf,
+  
+  y = y_limit,
+  
+  label = p_text,
+  
+  hjust = 1.1,
+  
+  vjust = 1.2,
+  
+  size = 5,
+  
+  fontface = "bold"
+  
+) +
+  
+  ##########################################################
+# Y-axis limits
+##########################################################
+
+coord_cartesian(
+  
+  ylim = c(
+    0,
+    y_limit
+  )
+  
+) +
+  
+  ##########################################################
+# Labels
+##########################################################
+
+labs(
+  
+  title = expression(
+    "Effect of " *
+      italic("Bacillus") *
+      " spp. on DSI"
+  ),
+  
+  x = "Isolates",
+  
+  y = "Disease Severity Index (%)"
+  
+) +
+  
+  ##########################################################
+# Theme
+##########################################################
+
+theme_classic(
+  base_size = 14
+) +
+  
+  theme(
+    
+    plot.title = element_text(
+      
+      face = "bold",
+      
+      size = 18,
+      
+      hjust = 0.5
+      
+    ),
+    
+    axis.title.x = element_text(
+      
+      face = "bold",
+      
+      size = 15
+      
+    ),
+    
+    axis.title.y = element_text(
+      
+      face = "bold",
+      
+      size = 15
+      
+    ),
+    
+    axis.text.x = element_text(
+      
+      angle = 90,
+      
+      hjust = 1,
+      
+      vjust = 0.5,
+      
+      size = 9,
+      
+      colour = "black"
+      
+    ),
+    
+    axis.text.y = element_text(
+      
+      size = 11,
+      
+      colour = "black"
+      
+    ),
+    
+    axis.line = element_line(
+      
+      linewidth = 0.8
+      
+    ),
+    
+    axis.ticks = element_line(
+      
+      linewidth = 0.8
+      
+    )
+    
+  )
+
+############################################################
+# Display graph
+############################################################
+
+print(DSI_plot)
+
+############################################################
+# Save graph
+############################################################
+
+ggsave(
+  
+  filename = "Effect_of_Bacillus_spp_on_DSI_Alphabetical.png",
+  
+  plot = DSI_plot,
+  
+  width = 1200,
+  
+  height = 500,
+  
+  units = "px",
+  
+  dpi = 300,
+  
+  bg = "white"
+  
+)
+
+############################################################
+# END
+############################################################
